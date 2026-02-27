@@ -1,0 +1,36 @@
+# ============================================================
+# Foundry (contracts/)
+# ============================================================
+contracts/out/
+contracts/cache/
+contracts/broadcast/
+contracts/artifacts/
+contracts/.env
+contracts/coverage/
+contracts/lcov.info
+
+# ============================================================
+# Next.js (FE/)
+# ============================================================
+FE/.next/
+FE/out/
+FE/build/
+FE/node_modules/
+FE/.env
+FE/.env.local
+FE/.env.development.local
+FE/.env.test.local
+FE/.env.production.local
+FE/npm-debug.log*
+FE/yarn-debug.log*
+FE/yarn-error.log*
+FE/.pnpm-debug.log*
+
+# ============================================================
+# General
+# ============================================================
+.env
+.env.*
+!.env.example
+.DS_Store
+*.log
