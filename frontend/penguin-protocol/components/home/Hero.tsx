@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { ROUTES } from '@/constants/routes';
 
 export default function Hero() {
   return (
@@ -31,8 +32,7 @@ export default function Hero() {
 
         {/* Action Buttons */}
         <div className="flex items-center justify-center gap-8 pt-6">
-          <Link href="/launch">
-            <button className="bg-white text-black px-8 py-3.5 rounded-full text-sm font-semibold hover:bg-neutral-200 hover:scale-[1.02] transition-all duration-300 flex items-center gap-2 shadow-[0_0_30px_rgba(255,255,255,0.2)]">
+        <Link href={ROUTES.LAUNCH}>            <button className="bg-white text-black px-8 py-3.5 rounded-full text-sm font-semibold hover:bg-neutral-200 hover:scale-[1.02] transition-all duration-300 flex items-center gap-2 shadow-[0_0_30px_rgba(255,255,255,0.2)]">
               Launch App
             </button>
           </Link>

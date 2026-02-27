@@ -1,49 +1,67 @@
+"use client";
+import { usePrivy } from "@privy-io/react-auth";
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
+import { ROUTES } from '@/constants/routes';
 
 export default function Navbar() {
+  const { login, authenticated, user, logout } = usePrivy();
+  const pathname = usePathname();
+
+  const shortAddress = user?.wallet?.address 
+    ? `${user.wallet.address.slice(0, 4)}...${user.wallet.address.slice(-4)}`
+    : "Connect";
+
+  const navLinks = [
+    { name: 'Launch', href: ROUTES.LAUNCH },
+    { name: 'Vault', href: ROUTES.VAULT },
+    { name: 'Markets', href: ROUTES.MARKETS },
+  ];
+
   return (
-    <div className="fixed top-6 left-1/2 -translate-x-1/2 z-50 w-full max-w-[1200px] px-6">
-      <nav className="nav-pill flex items-center justify-between px-6 py-3">
+    <nav className="fixed top-6 left-1/2 -translate-x-1/2 z-[100] w-full max-w-[1200px] px-6">
+      <div className="nav-pill flex items-center justify-between px-6 py-3">
         
-        {/* Logo & Left Links */}
         <div className="flex items-center gap-10">
-          <Link href="/" className="flex items-center gap-3">
-            <div className="w-6 h-6 rounded-full bg-white flex items-center justify-center">
-              <div className="w-2 h-2 bg-black rounded-full" />
+          <Link href={ROUTES.HOME} className="flex items-center gap-3">
+            <div className="w-5 h-5 rounded-full bg-white flex items-center justify-center">
+              <div className="w-1.5 h-1.5 bg-black rounded-full" />
             </div>
-            <span className="font-medium text-lg tracking-tight text-white">Penguin</span>
+            <span className="font-medium text-white tracking-tight hidden sm:block">Penguin</span>
           </Link>
-          
-          <div className="hidden md:flex gap-6 text-sm text-neutral-400">
-            <Link href="/" className="text-white">Home</Link>
-            <Link href="/launch" className="hover:text-white transition-colors">Launchpad</Link>
-            <Link href="/markets" className="hover:text-white transition-colors">Markets</Link>
-            <Link href="/docs" className="hover:text-white transition-colors flex items-center gap-1">
-              Resources 
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M6 9l6 6 6-6"/></svg>
-            </Link>
+
+          <div className="hidden md:flex gap-8">
+            {navLinks.map((link) => (
+              <Link 
+                key={link.name}
+                href={link.href}
+                className={`text-[11px] uppercase tracking-[0.2em] font-mono transition-colors ${
+                  pathname === link.href ? 'text-white' : 'text-neutral-500 hover:text-white'
+                }`}
+              >
+                {link.name}
+              </Link>
+            ))}
           </div>
         </div>
 
-        {/* Right Side: Protocol Stats & App Button */}
         <div className="flex items-center gap-4">
-          <div className="hidden lg:flex items-center gap-4 text-xs text-neutral-400 border border-white/10 rounded-full px-4 py-1.5 bg-white/5">
-            <span className="flex items-center gap-1.5">
-              <div className="w-1.5 h-1.5 rounded-full bg-neutral-400" />
-              $14.2M <span className="text-neutral-600">|</span>
-            </span>
-            <span className="flex items-center gap-1.5 text-white">
-              <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-              12.4% APY
-            </span>
-          </div>
-          
-          <Link href="/launch">
-            <button className="btn-outline">Launch App</button>
-          </Link>
+          {!authenticated ? (
+            <button onClick={login} className="bg-white text-black px-6 py-2 rounded-full text-sm font-semibold hover:bg-blue-50 transition-all">
+              Connect
+            </button>
+          ) : (
+            <div className="flex items-center gap-4">
+              <div className="px-4 py-2 bg-blue-500/10 border border-blue-500/20 rounded-full text-[10px] font-mono text-blue-400">
+                {shortAddress}
+              </div>
+              <button onClick={logout} className="text-[10px] font-mono text-neutral-600 hover:text-red-400 uppercase transition-colors">
+                Log Out
+              </button>
+            </div>
+          )}
         </div>
-
-      </nav>
-    </div>
+      </div>
+    </nav>
   );
 }
