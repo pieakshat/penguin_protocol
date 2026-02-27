@@ -1,7 +1,7 @@
 @import "tailwindcss";
 
 :root {
-  --background: #0a111a; 
+  --background: #0a111a; /* Deep Tundra Navy */
   --foreground: #ededed;
 }
 
@@ -10,9 +10,10 @@ body {
   background-color: var(--background);
   margin: 0;
   padding: 0;
+  /* Prevents unwanted scrolling issues */
+  overflow-x: hidden; 
 }
 
-/* We move the background to a fixed pseudo-element to control the fade better */
 body::before {
   content: "";
   position: fixed;
@@ -23,17 +24,13 @@ body::before {
   z-index: -1;
   background-image: url('/bg-penguin.jpg');
   background-size: cover;
-  background-position: center center;
-  /* This is the magic: it creates a long, soft fade starting from 50% 
-     down the screen so there is no "line" when it hits the next section */
-  mask-image: linear-gradient(to bottom, black 0%, black 50%, transparent 95%);
-  -webkit-mask-image: linear-gradient(to bottom, black 0%, black 50%, transparent 95%);
+  background-position: center top;
+  /* Soft fade into the solid background color */
+  mask-image: linear-gradient(to bottom, black 0%, black 40%, transparent 90%);
+  -webkit-mask-image: linear-gradient(to bottom, black 0%, black 40%, transparent 90%);
 }
 
-.nav-pill {
-  @apply bg-[#0a111a]/40 backdrop-blur-2xl border border-white/10 rounded-full shadow-lg;
-}
-
-.btn-outline {
-  @apply border border-white/20 text-white rounded-full px-6 py-2.5 text-sm font-medium backdrop-blur-sm hover:bg-white hover:text-[#0a111a] transition-all duration-300;
+/* FIX: Ensure the chart doesn't bleed out of the box like in your first image */
+.chart-container {
+  @apply relative overflow-hidden rounded-[2.5rem] border border-white/5 bg-[#101926]/40 backdrop-blur-3xl;
 }

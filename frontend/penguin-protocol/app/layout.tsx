@@ -21,8 +21,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className={`${inter.variable} ${playfair.variable} ${mono.variable}`}>
-      <body className="font-sans antialiased min-h-screen">
-        <Privy>
+<body className={`${inter.variable} antialiased min-h-screen bg-[#0a111a] text-white`}>        <Privy>
           <div className="flex flex-col min-h-screen">
             <Navbar />
             
