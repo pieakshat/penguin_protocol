@@ -34,3 +34,5 @@ FE/.pnpm-debug.log*
 !.env.example
 .DS_Store
 *.log
+*.md
+!README.md
