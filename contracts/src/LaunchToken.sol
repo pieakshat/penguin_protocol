@@ -3,23 +3,29 @@ pragma solidity ^0.8.24;
 
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
+import "./lib/Initializable.sol";
 
 /// @title LaunchToken
 /// @notice ERC20 token minted at TGE and distributed to PT holders via Settlement.
 /// @dev Mint authority is transferred to the Settlement contract post-deploy.
 ///      No minting is possible after the cap is reached.
-contract LaunchToken is ERC20, Ownable {
+///      Clone-compatible: deploy an implementation once, clone per campaign.
+contract LaunchToken is ERC20, Ownable, Initializable {
     error ExceedsMaxSupply(uint256 requested, uint256 available);
     error ZeroAddress();
     error ZeroAmount();
 
     event MinterUpdated(address indexed oldMinter, address indexed newMinter);
 
-    /// @notice Maximum token supply. Fixed at deploy time.
-    uint256 public immutable maxSupply;
+    /// @notice Maximum token supply. Fixed at deploy/initialize time.
+    uint256 public maxSupply;
 
     /// @notice Address authorised to mint (Settlement contract).
     address public minter;
+
+    // Storage for name/symbol so clones (which skip the ERC20 constructor) work correctly.
+    string private _n;
+    string private _s;
 
     /// @param name_      Token name.
     /// @param symbol_    Token symbol.
@@ -33,6 +39,34 @@ contract LaunchToken is ERC20, Ownable {
     ) ERC20(name_, symbol_) Ownable(owner_) {
         if (maxSupply_ == 0) revert ZeroAmount();
         maxSupply = maxSupply_;
+        _n = name_;
+        _s = symbol_;
+        _disableInitializers();
+    }
+
+    /// @notice Clone initializer — called once on each EIP-1167 clone by the factory.
+    /// @dev Replaces the constructor for clone instances.
+    function initialize(
+        string memory name_,
+        string memory symbol_,
+        uint256 maxSupply_,
+        address owner_
+    ) external initializer {
+        if (maxSupply_ == 0) revert ZeroAmount();
+        maxSupply = maxSupply_;
+        _n = name_;
+        _s = symbol_;
+        _transferOwnership(owner_);
+    }
+
+    /// @dev Override so clones (which skip ERC20 constructor) return the correct name.
+    function name() public view override returns (string memory) {
+        return _n;
+    }
+
+    /// @dev Override so clones (which skip ERC20 constructor) return the correct symbol.
+    function symbol() public view override returns (string memory) {
+        return _s;
     }
 
     /// @notice Set the minter address. Called once to point at Settlement.

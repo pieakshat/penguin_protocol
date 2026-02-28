@@ -5,6 +5,7 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import "./lib/Initializable.sol";
 
 /// @title LiquidityBootstrap
 /// @notice Holds USDC allocated for seeding PT/USDC and RT/USDC Uniswap v3 pools.
@@ -22,7 +23,8 @@ import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 ///        4. MM calls withdrawForLP() to pull USDC for seeding.
 ///        5. MM deploys position on Uniswap v3 and calls reportDeployed().
 ///        6. If MM goes dark, owner calls emergencyWithdraw().
-contract LiquidityBootstrap is Ownable, ReentrancyGuard {
+///      Clone-compatible: deploy an implementation once, clone per campaign.
+contract LiquidityBootstrap is Ownable, ReentrancyGuard, Initializable {
     using SafeERC20 for IERC20;
 
     error ZeroAddress();
@@ -36,13 +38,13 @@ contract LiquidityBootstrap is Ownable, ReentrancyGuard {
     event DeploymentReported(address indexed mm, uint256 usdcDeployed, string poolDescription);
     event EmergencyWithdraw(address indexed to, uint256 amount);
 
-    IERC20 public immutable paymentToken;
+    IERC20 public paymentToken;
 
     /// @notice PT token for this campaign. MMs may also withdraw PT for LP.
-    address public immutable ptToken;
+    address public ptToken;
 
     /// @notice RT token for this campaign. MMs may also withdraw RT for LP.
-    address public immutable rtToken;
+    address public rtToken;
 
     mapping(address => bool) public isWhitelisted;
 
@@ -64,6 +66,23 @@ contract LiquidityBootstrap is Ownable, ReentrancyGuard {
         paymentToken = IERC20(paymentToken_);
         ptToken = ptToken_;
         rtToken = rtToken_;
+        _disableInitializers();
+    }
+
+    /// @notice Clone initializer — called once on each EIP-1167 clone by the factory.
+    function initialize(
+        address paymentToken_,
+        address ptToken_,
+        address rtToken_,
+        address owner_
+    ) external initializer {
+        if (paymentToken_ == address(0) || ptToken_ == address(0) || rtToken_ == address(0)) {
+            revert ZeroAddress();
+        }
+        paymentToken = IERC20(paymentToken_);
+        ptToken = ptToken_;
+        rtToken = rtToken_;
+        _transferOwnership(owner_);
     }
 
     /// @notice Whitelist or de-whitelist a market maker address.

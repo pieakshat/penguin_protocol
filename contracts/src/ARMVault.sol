@@ -8,6 +8,7 @@ import "./interfaces/IARMVault.sol";
 import "./interfaces/IBatchAuction.sol";
 import "./interfaces/IPrincipalToken.sol";
 import "./interfaces/IRiskToken.sol";
+import "./lib/Initializable.sol";
 
 /// @title ARMVault
 /// @notice Accepts an AllocationNFT and splits it into PT and RT 1:1 with token amount.
@@ -16,7 +17,8 @@ import "./interfaces/IRiskToken.sol";
 ///      meaning the vault can be deployed before the auction finalizes.
 ///      The first deposit triggers the cache — subsequent reads use the cached value.
 ///      The vault permanently holds the NFT; there is no unwrap path.
-contract ARMVault is IARMVault, ReentrancyGuard {
+///      Clone-compatible: deploy an implementation once, clone per campaign.
+contract ARMVault is IARMVault, ReentrancyGuard, Initializable {
     error ZeroAddress();
     error AuctionNotFinalized();
     error NotNFTOwner(uint256 tokenId, address caller);
@@ -30,10 +32,10 @@ contract ARMVault is IARMVault, ReentrancyGuard {
         uint256 clearingPrice
     );
 
-    IBatchAuction public immutable batchAuction;
-    IAllocationNFT public immutable allocationNFT;
-    IPrincipalToken public immutable principalToken;
-    IRiskToken public immutable riskToken;
+    IBatchAuction public batchAuction;
+    IAllocationNFT public allocationNFT;
+    IPrincipalToken public principalToken;
+    IRiskToken public riskToken;
 
     /// @dev Cached after first deposit. 0 means not yet cached.
     uint256 private _clearingPrice;
@@ -47,6 +49,27 @@ contract ARMVault is IARMVault, ReentrancyGuard {
         address principalToken_,
         address riskToken_
     ) {
+        if (
+            batchAuction_ == address(0) ||
+            allocationNFT_ == address(0) ||
+            principalToken_ == address(0) ||
+            riskToken_ == address(0)
+        ) revert ZeroAddress();
+
+        batchAuction = IBatchAuction(batchAuction_);
+        allocationNFT = IAllocationNFT(allocationNFT_);
+        principalToken = IPrincipalToken(principalToken_);
+        riskToken = IRiskToken(riskToken_);
+        _disableInitializers();
+    }
+
+    /// @notice Clone initializer — called once on each EIP-1167 clone by the factory.
+    function initialize(
+        address batchAuction_,
+        address allocationNFT_,
+        address principalToken_,
+        address riskToken_
+    ) external initializer {
         if (
             batchAuction_ == address(0) ||
             allocationNFT_ == address(0) ||

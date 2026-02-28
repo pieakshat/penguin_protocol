@@ -5,10 +5,13 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import "./interfaces/ILaunchToken.sol";
 import "./interfaces/IPrincipalToken.sol";
 import "./interfaces/IRiskToken.sol";
 import "./interfaces/IARMVault.sol";
+import "./interfaces/IAllocationNFT.sol";
+import "./lib/Initializable.sol";
 
 /// @title Settlement
 /// @notice Handles post-TGE redemption of PT for LaunchTokens and RT for USDC.
@@ -24,43 +27,54 @@ import "./interfaces/IARMVault.sol";
 ///        payoutPerRT is computed once at setTGEPrice time and frozen —
 ///        all RT holders receive the same rate regardless of settlement order.
 ///        If the reserve is insufficient, payout is pro-rated uniformly across all RT.
-contract Settlement is Ownable, ReentrancyGuard {
+///      Clone-compatible: deploy an implementation once, clone per campaign.
+contract Settlement is Ownable, ReentrancyGuard, Initializable {
     using SafeERC20 for IERC20;
 
     error NotYetUnlocked();
     error TGEPriceNotSet();
     error TGEPriceAlreadySet();
     error PriceDelayNotMet();
+    error EmergencyDeadlineNotMet();
     error InvalidTGEPrice();
+    error NoReserve();
     error ZeroAmount();
     error ZeroAddress();
     error SettlementWindowOpen();
+    error NotNFTOwner();
 
     event RTReserveDeposited(uint256 amount);
     event TGEPriceSet(uint256 tgePrice, uint256 effectivePrice, uint256 payoutPerRT);
     event PTRedeemed(address indexed user, uint256 amount);
+    event AllocationRedeemed(address indexed user, uint256 indexed nftId, uint256 amount);
     event RTSettled(address indexed user, uint256 rtAmount, uint256 usdcPayout);
+    event EmergencyRTSettlementTriggered(uint256 payoutPerRT, uint256 totalRTOutstanding);
     event UnusedReserveWithdrawn(address indexed to, uint256 amount);
 
     /// @notice Minimum delay after unlockTime before the owner can set TGE price.
     ///         Forces the token to trade on the open market before price is locked.
     uint256 public constant MIN_PRICE_DELAY = 24 hours;
 
+    /// @notice If owner has not set TGE price within this window after unlockTime,
+    ///         anyone can trigger emergency RT settlement distributing whatever reserve exists.
+    uint256 public constant TGE_PRICE_DEADLINE = 90 days;
+
     /// @notice How long after setTGEPrice the owner must wait before reclaiming unused reserve.
-    uint256 public constant SETTLEMENT_WINDOW = 30 days;
+    uint256 public constant SETTLEMENT_WINDOW = 90 days;
 
     uint256 private constant PRECISION = 1e18;
 
-    ILaunchToken public immutable launchToken;
-    IPrincipalToken public immutable principalToken;
-    IRiskToken public immutable riskToken;
-    IARMVault public immutable armVault;
-    IERC20 public immutable paymentToken;
+    ILaunchToken public launchToken;
+    IPrincipalToken public principalToken;
+    IRiskToken public riskToken;
+    IARMVault public armVault;
+    IAllocationNFT public allocationNFT;
+    IERC20 public paymentToken;
 
     /// @notice Maximum TGE price multiplier for RT settlement.
     ///         e.g. 5 means RT pays out on at most 5x clearingPrice.
     ///         Bounds the USDC liability to: totalRT * clearingPrice * (rtCapMultiplier - 1).
-    uint256 public immutable rtCapMultiplier;
+    uint256 public rtCapMultiplier;
 
     uint256 public tgePrice;
     bool public tgePriceSet;
@@ -82,6 +96,7 @@ contract Settlement is Ownable, ReentrancyGuard {
     /// @param principalToken_  PT contract.
     /// @param riskToken_       RT contract.
     /// @param armVault_        ARMVault — provides clearingPrice and unlockTime.
+    /// @param allocationNFT_   AllocationNFT — for direct NFT redemption path.
     /// @param paymentToken_    USDC.
     /// @param rtCapMultiplier_ Max TGE price as a multiple of clearingPrice (e.g. 5 = 5x cap).
     /// @param owner_           Protocol multisig.
@@ -90,6 +105,7 @@ contract Settlement is Ownable, ReentrancyGuard {
         address principalToken_,
         address riskToken_,
         address armVault_,
+        address allocationNFT_,
         address paymentToken_,
         uint256 rtCapMultiplier_,
         address owner_
@@ -99,6 +115,7 @@ contract Settlement is Ownable, ReentrancyGuard {
             principalToken_ == address(0) ||
             riskToken_ == address(0) ||
             armVault_ == address(0) ||
+            allocationNFT_ == address(0) ||
             paymentToken_ == address(0)
         ) revert ZeroAddress();
         if (rtCapMultiplier_ <= 1) revert InvalidTGEPrice();
@@ -107,13 +124,63 @@ contract Settlement is Ownable, ReentrancyGuard {
         principalToken = IPrincipalToken(principalToken_);
         riskToken = IRiskToken(riskToken_);
         armVault = IARMVault(armVault_);
+        allocationNFT = IAllocationNFT(allocationNFT_);
         paymentToken = IERC20(paymentToken_);
         rtCapMultiplier = rtCapMultiplier_;
+        _disableInitializers();
+    }
+
+    /// @notice Clone initializer — called once on each EIP-1167 clone by the factory.
+    function initialize(
+        address launchToken_,
+        address principalToken_,
+        address riskToken_,
+        address armVault_,
+        address allocationNFT_,
+        address paymentToken_,
+        uint256 rtCapMultiplier_,
+        address owner_
+    ) external initializer {
+        if (
+            launchToken_ == address(0) ||
+            principalToken_ == address(0) ||
+            riskToken_ == address(0) ||
+            armVault_ == address(0) ||
+            allocationNFT_ == address(0) ||
+            paymentToken_ == address(0)
+        ) revert ZeroAddress();
+        if (rtCapMultiplier_ <= 1) revert InvalidTGEPrice();
+
+        launchToken = ILaunchToken(launchToken_);
+        principalToken = IPrincipalToken(principalToken_);
+        riskToken = IRiskToken(riskToken_);
+        armVault = IARMVault(armVault_);
+        allocationNFT = IAllocationNFT(allocationNFT_);
+        paymentToken = IERC20(paymentToken_);
+        rtCapMultiplier = rtCapMultiplier_;
+        _transferOwnership(owner_);
+    }
+
+    /// @notice Redeem an AllocationNFT directly for LaunchTokens without going through ARMVault.
+    /// @dev For users who hold an AllocationNFT and never deposited into ARM.
+    ///      NFT is permanently transferred to Settlement. User receives LaunchTokens 1:1.
+    ///      This bypasses the PT/RT system entirely — no RT upside, no PT mechanics.
+    /// @param nftId The AllocationNFT token ID to redeem.
+    function redeemAllocation(uint256 nftId) external nonReentrant {
+        if (block.timestamp < armVault.unlockTime()) revert NotYetUnlocked();
+        if (allocationNFT.ownerOf(nftId) != msg.sender) revert NotNFTOwner();
+
+        IAllocationNFT.Allocation memory allocation = allocationNFT.getAllocation(nftId);
+
+        IERC721(address(allocationNFT)).transferFrom(msg.sender, address(this), nftId);
+        launchToken.mint(msg.sender, allocation.amount);
+
+        emit AllocationRedeemed(msg.sender, nftId, allocation.amount);
     }
 
     /// @notice Deposit USDC into the RT settlement reserve.
-    /// @dev Can be called before or after setTGEPrice.
-    ///      If called after, payoutPerRT is already frozen — extra USDC stays as buffer.
+    /// @dev Must be called before setTGEPrice to be reflected in payoutPerRT.
+    ///      Deposits after setTGEPrice do not update the frozen rate.
     function depositRTReserve(uint256 amount) external onlyOwner {
         if (amount == 0) revert ZeroAmount();
         paymentToken.safeTransferFrom(msg.sender, address(this), amount);
@@ -131,6 +198,7 @@ contract Settlement is Ownable, ReentrancyGuard {
     function setTGEPrice(uint256 tgePrice_) external onlyOwner {
         if (tgePriceSet) revert TGEPriceAlreadySet();
         if (tgePrice_ == 0) revert InvalidTGEPrice();
+        if (rtReserve == 0) revert NoReserve();
 
         uint256 unlock = armVault.unlockTime();
         if (block.timestamp < unlock + MIN_PRICE_DELAY) revert PriceDelayNotMet();
@@ -213,6 +281,31 @@ contract Settlement is Ownable, ReentrancyGuard {
         paymentToken.safeTransfer(to, amount);
 
         emit UnusedReserveWithdrawn(to, amount);
+    }
+
+    /// @notice Permissionless emergency fallback if owner never calls setTGEPrice.
+    /// @dev Callable by anyone after unlockTime + TGE_PRICE_DEADLINE.
+    ///      Snapshots RT supply and distributes whatever reserve exists pro-rata.
+    ///      RT holders then use the normal settleRT() path.
+    ///      payoutPerRT = 0 if no reserve was deposited — RT holders burn for nothing,
+    ///      but at least they are not permanently locked.
+    function triggerEmergencyRTSettlement() external {
+        if (tgePriceSet) revert TGEPriceAlreadySet();
+
+        uint256 unlock = armVault.unlockTime();
+        if (block.timestamp <= unlock + TGE_PRICE_DEADLINE) revert EmergencyDeadlineNotMet();
+
+        uint256 rtSupply = riskToken.totalSupply();
+        uint256 payout = (rtSupply > 0 && rtReserve > 0)
+            ? (rtReserve * PRECISION) / rtSupply
+            : 0;
+
+        totalRTOutstanding = rtSupply;
+        payoutPerRT = payout;
+        tgePriceSet = true;
+        tgePriceSetAt = block.timestamp;
+
+        emit EmergencyRTSettlementTriggered(payout, rtSupply);
     }
 
     /// @notice Maximum USDC liability for RT given current reserve.

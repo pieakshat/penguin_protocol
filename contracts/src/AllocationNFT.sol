@@ -4,12 +4,14 @@ pragma solidity ^0.8.24;
 import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "./interfaces/IAllocationNFT.sol";
+import "./lib/Initializable.sol";
 
 /// @title AllocationNFT
 /// @notice ERC721 representing a user's locked token allocation from the CCA.
 /// @dev Minted by ContinuousClearingAuction post-clearing. Deposited into ARMVault
 ///      to receive PT and RT. Each token stores immutable allocation metadata.
-contract AllocationNFT is IAllocationNFT, ERC721, Ownable {
+///      Clone-compatible: deploy an implementation once, clone per campaign.
+contract AllocationNFT is IAllocationNFT, ERC721, Ownable, Initializable {
     error ZeroAddress();
     error ZeroAmount();
     error InvalidToken(uint256 tokenId);
@@ -31,7 +33,24 @@ contract AllocationNFT is IAllocationNFT, ERC721, Ownable {
 
     mapping(uint256 => IAllocationNFT.Allocation) private _allocations;
 
-    constructor(address owner_) ERC721("Penguin Allocation", "pALLOC") Ownable(owner_) {}
+    constructor(address owner_) ERC721("Penguin Allocation", "pALLOC") Ownable(owner_) {
+        _disableInitializers();
+    }
+
+    /// @notice Clone initializer — called once on each EIP-1167 clone by the factory.
+    function initialize(address owner_) external initializer {
+        _transferOwnership(owner_);
+    }
+
+    /// @dev Override — name is always constant regardless of constructor vs clone path.
+    function name() public pure override returns (string memory) {
+        return "Penguin Allocation";
+    }
+
+    /// @dev Override — symbol is always constant regardless of constructor vs clone path.
+    function symbol() public pure override returns (string memory) {
+        return "pALLOC";
+    }
 
     /// @notice Set the minter. Called once after CCA is deployed.
     function setMinter(address minter_) external onlyOwner {

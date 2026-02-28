@@ -6,6 +6,7 @@ import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "./interfaces/IAllocationNFT.sol";
+import "./lib/Initializable.sol";
 
 /// @title ContinuousClearingAuction
 /// @notice Uniform-price batch auction for fair token distribution.
@@ -16,7 +17,8 @@ import "./interfaces/IAllocationNFT.sol";
 ///      If oversubscribed, winning bids are pro-rated via fillRatio.
 ///      If the owner fails to finalize within FINALIZATION_GRACE_PERIOD, bidders
 ///      can emergency-refund their deposits without trust assumptions.
-contract ContinuousClearingAuction is Ownable, ReentrancyGuard {
+///      Clone-compatible: deploy an implementation once, clone per campaign.
+contract ContinuousClearingAuction is Ownable, ReentrancyGuard, Initializable {
     using SafeERC20 for IERC20;
 
     error AuctionNotActive();
@@ -32,6 +34,7 @@ contract ContinuousClearingAuction is Ownable, ReentrancyGuard {
     error InvalidTimestamps();
     error MaxBidsReached();
     error GracePeriodNotExpired();
+    error NoProceeds();
 
     event BidSubmitted(
         uint256 indexed bidId,
@@ -47,6 +50,7 @@ contract ContinuousClearingAuction is Ownable, ReentrancyGuard {
         uint256 refund
     );
     event BidRefunded(uint256 indexed bidId, address indexed bidder, uint256 refund);
+    event ProceedsWithdrawn(address indexed to, uint256 amount);
 
     struct Bid {
         address bidder;
@@ -66,17 +70,17 @@ contract ContinuousClearingAuction is Ownable, ReentrancyGuard {
     /// @notice Window after auctionEnd before emergency refunds become available.
     uint256 public constant FINALIZATION_GRACE_PERIOD = 7 days;
 
-    IERC20 public immutable paymentToken;
-    IAllocationNFT public immutable allocationNFT;
+    IERC20 public paymentToken;
+    IAllocationNFT public allocationNFT;
 
     /// @notice Total LaunchTokens available in this auction (1e18 decimals).
-    uint256 public immutable totalTokenSupply;
-    uint256 public immutable auctionStart;
-    uint256 public immutable auctionEnd;
+    uint256 public totalTokenSupply;
+    uint256 public auctionStart;
+    uint256 public auctionEnd;
     /// @notice Passed directly into each minted AllocationNFT as the TGE unlock time.
-    uint256 public immutable unlockTime;
+    uint256 public unlockTime;
     /// @notice Floor price per token in payment token decimals. Bids below this are rejected.
-    uint256 public immutable minimumPrice;
+    uint256 public minimumPrice;
 
     uint256 public clearingPrice;
     uint256 public totalSubscribed;
@@ -86,6 +90,10 @@ contract ContinuousClearingAuction is Ownable, ReentrancyGuard {
     uint256 public fillRatio;
 
     bool public finalized;
+
+    /// @notice Accumulated protocol proceeds from winning bids.
+    ///         Increases as winners call settle(). Owner withdraws via withdrawProceeds().
+    uint256 public proceedsAvailable;
 
     Bid[] public bids;
     mapping(address => uint256[]) private _userBidIds;
@@ -119,6 +127,32 @@ contract ContinuousClearingAuction is Ownable, ReentrancyGuard {
         auctionEnd = auctionEnd_;
         unlockTime = unlockTime_;
         minimumPrice = minimumPrice_;
+        _disableInitializers();
+    }
+
+    /// @notice Clone initializer — called once on each EIP-1167 clone by the factory.
+    function initialize(
+        address paymentToken_,
+        address allocationNFT_,
+        uint256 totalTokenSupply_,
+        uint256 auctionStart_,
+        uint256 auctionEnd_,
+        uint256 unlockTime_,
+        uint256 minimumPrice_,
+        address owner_
+    ) external initializer {
+        if (paymentToken_ == address(0) || allocationNFT_ == address(0)) revert ZeroAddress();
+        if (totalTokenSupply_ == 0 || minimumPrice_ == 0) revert ZeroAmount();
+        if (auctionEnd_ <= auctionStart_ || unlockTime_ <= auctionEnd_) revert InvalidTimestamps();
+
+        paymentToken = IERC20(paymentToken_);
+        allocationNFT = IAllocationNFT(allocationNFT_);
+        totalTokenSupply = totalTokenSupply_;
+        auctionStart = auctionStart_;
+        auctionEnd = auctionEnd_;
+        unlockTime = unlockTime_;
+        minimumPrice = minimumPrice_;
+        _transferOwnership(owner_);
     }
 
     /// @notice Submit a bid during the auction window.
@@ -206,6 +240,7 @@ contract ContinuousClearingAuction is Ownable, ReentrancyGuard {
             }
 
             if (filledAmount > 0) {
+                proceedsAvailable += cost;
                 allocationNFT.mint(msg.sender, filledAmount, clearingPrice, unlockTime);
             }
 
@@ -233,6 +268,17 @@ contract ContinuousClearingAuction is Ownable, ReentrancyGuard {
         paymentToken.safeTransfer(msg.sender, refund);
 
         emit BidRefunded(bidId, msg.sender, refund);
+    }
+
+    /// @notice Withdraw accumulated auction proceeds to `to`.
+    /// @dev Proceeds accumulate as winners settle. Can be called incrementally.
+    function withdrawProceeds(address to) external onlyOwner nonReentrant {
+        if (to == address(0)) revert ZeroAddress();
+        uint256 amount = proceedsAvailable;
+        if (amount == 0) revert NoProceeds();
+        proceedsAvailable = 0;
+        paymentToken.safeTransfer(to, amount);
+        emit ProceedsWithdrawn(to, amount);
     }
 
     function getBidCount() external view returns (uint256) {
