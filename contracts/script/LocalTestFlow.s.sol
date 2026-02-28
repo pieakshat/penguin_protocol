@@ -25,6 +25,16 @@ import "../src/mocks/MockERC20.sol";
 ///   FACTORY_ADDRESS — reuse an already-deployed factory (skips impl + factory deploy)
 contract LocalTestFlow is Script {
 
+    /// @dev Advance Anvil's real block timestamp AND the local simulation's view.
+    ///      vm.warp alone only affects the local Foundry EVM — it does NOT move
+    ///      the actual node clock, so time-gated on-chain functions still revert.
+    ///      anvil_setNextBlockTimestamp + anvil_mine moves the real node forward.
+    function _warp(uint256 ts) internal {
+        vm.rpc("anvil_setNextBlockTimestamp", string.concat("[", vm.toString(ts), "]"));
+        vm.rpc("anvil_mine", "[1]");
+        vm.warp(ts); // keep local simulation in sync
+    }
+
     // ── Anvil default accounts ──────────────────────────────────────────────
     address deployer = 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266;
     address alice    = 0x70997970C51812dc3A010C7d01b50e0d17dc79C8;
@@ -103,8 +113,8 @@ contract LocalTestFlow is Script {
         // PHASE 1 — Auction
         // ════════════════════════════════════════════════════════════════════
 
-        // Warp to auction start
-        vm.warp(auctionStart + 1);
+        // Advance Anvil to auction start
+        _warp(auctionStart + 1);
         console.log("\n--- Phase 1: Auction ---");
 
         // Alice bids 600k tokens @ $3 — deposit = 1,800,000 USDC
@@ -122,7 +132,7 @@ contract LocalTestFlow is Script {
         console.log("Bob bid:   400k tokens @ $2");
 
         // ── Finalize at clearing price = $2 (exactly subscribed) ─────────────
-        vm.warp(auctionEnd + 1);
+        _warp(auctionEnd + 1);
         vm.startBroadcast(deployerKey);
         auction.finalizeAuction(2e6);
         vm.stopBroadcast();
@@ -179,7 +189,7 @@ contract LocalTestFlow is Script {
         // ════════════════════════════════════════════════════════════════════
         console.log("\n--- Phase 3: TGE ---");
 
-        vm.warp(unlockTime + 24 hours + 1);
+        _warp(unlockTime + 24 hours + 1);
 
         // Max liability = 1M tokens * $2 CP * (5-1) = $8M USDC
         console.log("Max RT liability:", settlement.maxRTLiability() / 1e6, "USDC");
