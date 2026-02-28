@@ -1,0 +1,242 @@
+[
+  {
+    "type": "constructor",
+    "inputs": [
+      { "name": "paymentToken_", "type": "address", "internalType": "address" },
+      { "name": "allocationNFT_", "type": "address", "internalType": "address" },
+      { "name": "totalTokenSupply_", "type": "uint256", "internalType": "uint256" },
+      { "name": "auctionStart_", "type": "uint256", "internalType": "uint256" },
+      { "name": "auctionEnd_", "type": "uint256", "internalType": "uint256" },
+      { "name": "unlockTime_", "type": "uint256", "internalType": "uint256" },
+      { "name": "minimumPrice_", "type": "uint256", "internalType": "uint256" },
+      { "name": "owner_", "type": "address", "internalType": "address" }
+    ],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "submitBid",
+    "inputs": [
+      { "name": "tokenAmount", "type": "uint256", "internalType": "uint256" },
+      { "name": "maxPrice", "type": "uint256", "internalType": "uint256" }
+    ],
+    "outputs": [
+      { "name": "bidId", "type": "uint256", "internalType": "uint256" }
+    ],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "finalizeAuction",
+    "inputs": [
+      { "name": "clearingPrice_", "type": "uint256", "internalType": "uint256" }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "settle",
+    "inputs": [
+      { "name": "bidId", "type": "uint256", "internalType": "uint256" }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "emergencyRefund",
+    "inputs": [
+      { "name": "bidId", "type": "uint256", "internalType": "uint256" }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "getBidCount",
+    "inputs": [],
+    "outputs": [
+      { "name": "", "type": "uint256", "internalType": "uint256" }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "getUserBidIds",
+    "inputs": [
+      { "name": "user", "type": "address", "internalType": "address" }
+    ],
+    "outputs": [
+      { "name": "", "type": "uint256[]", "internalType": "uint256[]" }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "getBid",
+    "inputs": [
+      { "name": "bidId", "type": "uint256", "internalType": "uint256" }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "tuple",
+        "internalType": "struct ContinuousClearingAuction.Bid",
+        "components": [
+          { "name": "bidder", "type": "address", "internalType": "address" },
+          { "name": "tokenAmount", "type": "uint256", "internalType": "uint256" },
+          { "name": "maxPrice", "type": "uint256", "internalType": "uint256" },
+          { "name": "settled", "type": "bool", "internalType": "bool" }
+        ]
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "paymentToken",
+    "inputs": [],
+    "outputs": [{ "name": "", "type": "address", "internalType": "address" }],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "allocationNFT",
+    "inputs": [],
+    "outputs": [{ "name": "", "type": "address", "internalType": "address" }],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "totalTokenSupply",
+    "inputs": [],
+    "outputs": [{ "name": "", "type": "uint256", "internalType": "uint256" }],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "auctionStart",
+    "inputs": [],
+    "outputs": [{ "name": "", "type": "uint256", "internalType": "uint256" }],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "auctionEnd",
+    "inputs": [],
+    "outputs": [{ "name": "", "type": "uint256", "internalType": "uint256" }],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "unlockTime",
+    "inputs": [],
+    "outputs": [{ "name": "", "type": "uint256", "internalType": "uint256" }],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "minimumPrice",
+    "inputs": [],
+    "outputs": [{ "name": "", "type": "uint256", "internalType": "uint256" }],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "clearingPrice",
+    "inputs": [],
+    "outputs": [{ "name": "", "type": "uint256", "internalType": "uint256" }],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "totalSubscribed",
+    "inputs": [],
+    "outputs": [{ "name": "", "type": "uint256", "internalType": "uint256" }],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "fillRatio",
+    "inputs": [],
+    "outputs": [{ "name": "", "type": "uint256", "internalType": "uint256" }],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "finalized",
+    "inputs": [],
+    "outputs": [{ "name": "", "type": "bool", "internalType": "bool" }],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "MAX_BIDS",
+    "inputs": [],
+    "outputs": [{ "name": "", "type": "uint256", "internalType": "uint256" }],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "FINALIZATION_GRACE_PERIOD",
+    "inputs": [],
+    "outputs": [{ "name": "", "type": "uint256", "internalType": "uint256" }],
+    "stateMutability": "view"
+  },
+  {
+    "type": "event",
+    "name": "BidSubmitted",
+    "inputs": [
+      { "name": "bidId", "type": "uint256", "internalType": "uint256", "indexed": true },
+      { "name": "bidder", "type": "address", "internalType": "address", "indexed": true },
+      { "name": "tokenAmount", "type": "uint256", "internalType": "uint256", "indexed": false },
+      { "name": "maxPrice", "type": "uint256", "internalType": "uint256", "indexed": false }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "AuctionFinalized",
+    "inputs": [
+      { "name": "clearingPrice", "type": "uint256", "internalType": "uint256", "indexed": false },
+      { "name": "totalSubscribed", "type": "uint256", "internalType": "uint256", "indexed": false },
+      { "name": "totalFilled", "type": "uint256", "internalType": "uint256", "indexed": false }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "AllocationClaimed",
+    "inputs": [
+      { "name": "bidId", "type": "uint256", "internalType": "uint256", "indexed": true },
+      { "name": "bidder", "type": "address", "internalType": "address", "indexed": true },
+      { "name": "filledAmount", "type": "uint256", "internalType": "uint256", "indexed": false },
+      { "name": "refund", "type": "uint256", "internalType": "uint256", "indexed": false }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "BidRefunded",
+    "inputs": [
+      { "name": "bidId", "type": "uint256", "internalType": "uint256", "indexed": true },
+      { "name": "bidder", "type": "address", "internalType": "address", "indexed": true },
+      { "name": "refund", "type": "uint256", "internalType": "uint256", "indexed": false }
+    ],
+    "anonymous": false
+  },
+  { "type": "error", "name": "AuctionNotActive", "inputs": [] },
+  { "type": "error", "name": "AuctionNotEnded", "inputs": [] },
+  { "type": "error", "name": "AuctionAlreadyFinalized", "inputs": [] },
+  { "type": "error", "name": "AuctionNotFinalized", "inputs": [] },
+  { "type": "error", "name": "InvalidClearingPrice", "inputs": [] },
+  { "type": "error", "name": "BidAlreadySettled", "inputs": [] },
+  { "type": "error", "name": "NotBidder", "inputs": [] },
+  { "type": "error", "name": "ZeroAmount", "inputs": [] },
+  { "type": "error", "name": "ZeroAddress", "inputs": [] },
+  { "type": "error", "name": "BelowMinimumPrice", "inputs": [] },
+  { "type": "error", "name": "InvalidTimestamps", "inputs": [] },
+  { "type": "error", "name": "MaxBidsReached", "inputs": [] },
+  { "type": "error", "name": "GracePeriodNotExpired", "inputs": [] }
+]
