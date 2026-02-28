@@ -1,0 +1,15 @@
+{
+  "name": "penguin-sim",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "simulate": "ts-node engine/scenario.ts"
+  },
+  "dependencies": {
+    "typescript": "^5.3.3"
+  },
+  "devDependencies": {
+    "ts-node": "^10.9.2",
+    "@types/node": "^20.11.0"
+  }
+}
