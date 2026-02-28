@@ -5,8 +5,6 @@ libs = ["lib"]
 via_ir = true
 optimizer = true
 optimizer_runs = 200
-# BSC mainnet enforces a minimum gas price of 1 gwei. 3 gwei is standard.
-gas_price = 3000000000
 
 [rpc_endpoints]
 bsc         = "https://bsc-mainnet.infura.io/v3/${INFURA_API_KEY}"
