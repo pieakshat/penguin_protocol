@@ -1,16 +1,14 @@
 "use client";
-import { usePrivy } from "@privy-io/react-auth";
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { ROUTES } from '@/constants/routes';
 
+const DEMO_ADDRESS = '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266'
+
 export default function Navbar() {
-  const { login, authenticated, user, logout } = usePrivy();
   const pathname = usePathname();
 
-  const shortAddress = user?.wallet?.address 
-    ? `${user.wallet.address.slice(0, 4)}...${user.wallet.address.slice(-4)}`
-    : "Connect";
+  const shortAddress = `${DEMO_ADDRESS.slice(0, 6)}...${DEMO_ADDRESS.slice(-4)}`
 
   const navLinks = [
     { name: 'Launch', href: ROUTES.LAUNCH },
@@ -46,20 +44,9 @@ export default function Navbar() {
         </div>
 
         <div className="flex items-center gap-4">
-          {!authenticated ? (
-            <button onClick={login} className="bg-white text-black px-6 py-2 rounded-full text-sm font-semibold hover:bg-blue-50 transition-all">
-              Connect
-            </button>
-          ) : (
-            <div className="flex items-center gap-4">
-              <div className="px-4 py-2 bg-blue-500/10 border border-blue-500/20 rounded-full text-[10px] font-mono text-blue-400">
-                {shortAddress}
-              </div>
-              <button onClick={logout} className="text-[10px] font-mono text-neutral-600 hover:text-red-400 uppercase transition-colors">
-                Log Out
-              </button>
-            </div>
-          )}
+          <div className="px-4 py-2 bg-blue-500/10 border border-blue-500/20 rounded-full text-[10px] font-mono text-blue-400">
+            {shortAddress}
+          </div>
         </div>
       </div>
     </nav>

@@ -1,23 +1,18 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { usePrivy, useWallets } from "@privy-io/react-auth";
-import { createWalletClient, custom, formatUnits } from "viem";
-import { bsc } from "viem/chains";
+import { formatUnits } from "viem";
 import { getUserNFTs } from "@/app/actions/vault";
 import { getUserBalances } from "@/app/actions/settlement";
 import type { NFTAllocation } from "@/app/actions/vault";
 import { VaultStats } from "@/components/vault/VaultStats";
 import { AssetCard } from "@/components/vault/AssetCard";
 import { ARMSplitter } from "@/components/vault/ARMSplitter";
-import { ADDRESSES } from "@/lib/contracts";
+import { ADDRESSES, demoWalletClient, demoAccount } from "@/lib/contracts";
 import AllocationNFTABI from "@/lib/abi/AllocationNFT.json";
 import ARMVaultABI from "@/lib/abi/ARMVault.json";
 
 export default function VaultPage() {
-  const { authenticated, ready } = usePrivy();
-  const { wallets } = useWallets();
-
   const [nfts, setNfts] = useState<NFTAllocation[]>([]);
   const [selectedNft, setSelectedNft] = useState<NFTAllocation | null>(null);
   const [ptBalance, setPtBalance] = useState("0");
@@ -26,54 +21,48 @@ export default function VaultPage() {
   const [depositStatus, setDepositStatus] = useState<"idle" | "approving" | "depositing" | "done" | "error">("idle");
   const [depositError, setDepositError] = useState("");
 
-  const wallet = wallets[0];
-
   const loadData = useCallback(async () => {
-    if (!wallet?.address) return;
     setLoading(true);
     const [fetchedNfts, balances] = await Promise.all([
-      getUserNFTs(wallet.address),
-      getUserBalances(wallet.address),
+      getUserNFTs(demoAccount.address),
+      getUserBalances(demoAccount.address),
     ]);
     setNfts(fetchedNfts);
     setPtBalance(balances.ptBalance);
     setRtBalance(balances.rtBalance);
     setLoading(false);
-  }, [wallet?.address]);
+  }, []);
 
   useEffect(() => { loadData(); }, [loadData]);
 
   async function handleDeposit(nft: NFTAllocation) {
-    if (!wallet || !ADDRESSES.armVault || !ADDRESSES.allocationNFT) {
+    if (!ADDRESSES.armVault || !ADDRESSES.allocationNFT) {
       setDepositError("Contract addresses not set in .env.local");
       setDepositStatus("error");
       return;
     }
     try {
       setDepositError("");
-      const provider = await wallet.getEthereumProvider();
-      const walletClient = createWalletClient({ chain: bsc, transport: custom(provider) });
-      const account = wallet.address as `0x${string}`;
       const tokenId = BigInt(nft.tokenId);
 
       // 1. Approve NFT to ARMVault
       setDepositStatus("approving");
-      await walletClient.writeContract({
+      await demoWalletClient.writeContract({
         address: ADDRESSES.allocationNFT,
         abi: AllocationNFTABI,
         functionName: "approve",
         args: [ADDRESSES.armVault, tokenId],
-        account,
+        account: demoAccount,
       });
 
       // 2. Deposit NFT → mint PT + RT 1:1
       setDepositStatus("depositing");
-      await walletClient.writeContract({
+      await demoWalletClient.writeContract({
         address: ADDRESSES.armVault,
         abi: ARMVaultABI,
         functionName: "deposit",
         args: [tokenId],
-        account,
+        account: demoAccount,
       });
 
       setDepositStatus("done");
@@ -89,13 +78,6 @@ export default function VaultPage() {
   const ptBalanceDisplay = ptBalance !== "0" ? Number(formatUnits(BigInt(ptBalance), 18)).toLocaleString() : "0";
   const rtBalanceDisplay = rtBalance !== "0" ? Number(formatUnits(BigInt(rtBalance), 18)).toLocaleString() : "0";
 
-  if (ready && !authenticated) {
-    return (
-      <div className="relative min-h-screen flex items-center justify-center font-sans overflow-hidden bg-[#0a111a]">
-        <p className="text-neutral-500 text-sm">Connect your wallet to view your vault.</p>
-      </div>
-    );
-  }
 
   return (
     <div className="relative min-h-screen pt-32 pb-20 px-6 font-sans overflow-hidden bg-[#0a111a]">

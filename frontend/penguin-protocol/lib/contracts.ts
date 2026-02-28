@@ -1,5 +1,11 @@
-import { createPublicClient, http, keccak256, encodeAbiParameters, defineChain } from 'viem'
+import { createPublicClient, createWalletClient, http, keccak256, encodeAbiParameters, defineChain } from 'viem'
 import { bsc } from 'viem/chains'
+import { privateKeyToAccount } from 'viem/accounts'
+
+// ── Demo account (Anvil test key #0) ─────────────────────────────────────────
+export const demoAccount = privateKeyToAccount(
+  '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80'
+)
 
 export const anvil = defineChain({
   id: 31337,
@@ -39,7 +45,13 @@ export const MM_POOL_ID = (process.env.NEXT_PUBLIC_POOL_ID ?? '') as `0x${string
 
 export const publicClient = createPublicClient({
   chain: bsc,
-  transport: http(),
+  transport: http('http://127.0.0.1:8545'),
+})
+
+export const demoWalletClient = createWalletClient({
+  account: demoAccount,
+  chain: bsc,
+  transport: http('http://127.0.0.1:8545'),
 })
 
 export const mmPublicClient = createPublicClient({

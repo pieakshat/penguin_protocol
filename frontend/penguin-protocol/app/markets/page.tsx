@@ -1,15 +1,11 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { usePrivy, useWallets } from "@privy-io/react-auth";
-import { createWalletClient, custom, parseUnits, formatUnits, encodeAbiParameters } from "viem";
-import { bsc } from "viem/chains";
-import { anvil } from "@/lib/contracts";
-import dynamic from "next/dynamic";
+import { parseUnits, formatUnits, encodeAbiParameters } from "viem";
+import { ADDRESSES, MM_ADDRESSES, MM_POOL_ID, demoWalletClient, demoAccount } from "@/lib/contracts";
 
-import { getSettlementState, getUserBalances } from "@/app/actions/settlement";
-import type { SettlementState } from "@/app/actions/settlement";
-import { ADDRESSES, MM_ADDRESSES, MM_POOL_ID } from "@/lib/contracts";
+import { getSettlementState, getUserBalances, getUserNFTs } from "@/app/actions/settlement";
+import type { SettlementState, UserNFT } from "@/app/actions/settlement";
 import SettlementABI from "@/lib/abi/Settlement.json";
 import ERC20ABI from "@/lib/abi/ERC20Extended.json";
 import LiquidityVaultABI from "@/lib/abi/LiquidityVault.json";
@@ -18,13 +14,9 @@ import StrategyManagerABI from "@/lib/abi/StrategyManager.json";
 import { getMMPoolState, getMMModules, getInjectionHistory } from "@/app/actions/mm";
 import type { MMPoolState, DecodedModule, InjectionEvent } from "@/app/actions/mm";
 
-const BondingCurveChart = dynamic(() => import("@/components/ui/BondingCurveChart"), {
-  ssr: false,
-  loading: () => <div className="w-full h-full bg-blue-500/5 animate-pulse rounded-3xl" />,
-});
 
 type MainTab = "strategy" | "settlement";
-type SettleTab = "pt" | "rt";
+type SettleTab = "pt" | "rt" | "alloc";
 type TxStatus = "idle" | "approving" | "depositing" | "submitting" | "done" | "error";
 type ModuleType = "time" | "volume" | "price";
 
@@ -60,9 +52,6 @@ function priceToSqrtX96(price: number): bigint {
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function MarketsPage() {
-  const { authenticated } = usePrivy();
-  const { wallets: privyWallets } = useWallets();
-  const wallet = privyWallets[0];
 
   const [mainTab, setMainTab] = useState<MainTab>("strategy");
 
@@ -88,6 +77,11 @@ export default function MarketsPage() {
   const [redeemAmount, setRedeemAmount] = useState("");
   const [settleTxStatus, setSettleTxStatus] = useState<TxStatus>("idle");
   const [settleTxError, setSettleTxError] = useState("");
+  // alloc sub-tab
+  const [userNFTs, setUserNFTs] = useState<UserNFT[]>([]);
+  const [nftsLoading, setNftsLoading] = useState(false);
+  const [allocTxStatus, setAllocTxStatus] = useState<Record<string, TxStatus>>({});
+  const [allocTxError, setAllocTxError] = useState<Record<string, string>>({});
 
   // ── Load ──────────────────────────────────────────────────────────────────
   const loadMMData = useCallback(async () => {
@@ -106,14 +100,19 @@ export default function MarketsPage() {
   const loadSettlementData = useCallback(async () => {
     const [state, balances] = await Promise.all([
       getSettlementState(),
-      wallet?.address
-        ? getUserBalances(wallet.address)
-        : Promise.resolve({ ptBalance: "0", rtBalance: "0" }),
+      getUserBalances(demoAccount.address),
     ]);
     setSettlement(state);
     setPtBalance(balances.ptBalance);
     setRtBalance(balances.rtBalance);
-  }, [wallet?.address]);
+  }, []);
+
+  const loadUserNFTs = useCallback(async () => {
+    setNftsLoading(true);
+    const nfts = await getUserNFTs(demoAccount.address);
+    setUserNFTs(nfts);
+    setNftsLoading(false);
+  }, []);
 
   useEffect(() => { loadMMData(); }, [loadMMData]);
   useEffect(() => { loadSettlementData(); }, [loadSettlementData]);
@@ -121,18 +120,15 @@ export default function MarketsPage() {
   // ── Admin writes ──────────────────────────────────────────────────────────
 
   async function handleVaultDeposit() {
-    if (!wallet || !deposit0 || !deposit1) return;
+    if (!deposit0 || !deposit1) return;
     try {
       setAdminError(""); setAdminStatus("approving");
-      const provider = await wallet.getEthereumProvider();
-      const wc = createWalletClient({ chain: anvil, transport: custom(provider) });
-      const account = wallet.address as `0x${string}`;
       const amt0 = parseUnits(deposit0, 18);
       const amt1 = parseUnits(deposit1, 18);
-      await wc.writeContract({ address: MM_ADDRESSES.token0, abi: ERC20ABI, functionName: "approve", args: [MM_ADDRESSES.liquidityVault, amt0], account });
-      await wc.writeContract({ address: MM_ADDRESSES.token1, abi: ERC20ABI, functionName: "approve", args: [MM_ADDRESSES.liquidityVault, amt1], account });
+      await demoWalletClient.writeContract({ address: MM_ADDRESSES.token0, abi: ERC20ABI, functionName: "approve", args: [MM_ADDRESSES.liquidityVault, amt0], account: demoAccount });
+      await demoWalletClient.writeContract({ address: MM_ADDRESSES.token1, abi: ERC20ABI, functionName: "approve", args: [MM_ADDRESSES.liquidityVault, amt1], account: demoAccount });
       setAdminStatus("depositing");
-      await wc.writeContract({ address: MM_ADDRESSES.liquidityVault, abi: LiquidityVaultABI, functionName: "deposit", args: [MM_POOL_ID, MM_ADDRESSES.token0, MM_ADDRESSES.token1, amt0, amt1], account });
+      await demoWalletClient.writeContract({ address: MM_ADDRESSES.liquidityVault, abi: LiquidityVaultABI, functionName: "deposit", args: [MM_POOL_ID, MM_ADDRESSES.token0, MM_ADDRESSES.token1, amt0, amt1], account: demoAccount });
       setAdminStatus("done"); setDeposit0(""); setDeposit1("");
       await loadMMData();
     } catch (err: unknown) {
@@ -143,15 +139,12 @@ export default function MarketsPage() {
   }
 
   async function handleVaultWithdraw() {
-    if (!wallet || !withdraw0 && !withdraw1) return;
+    if (!withdraw0 && !withdraw1) return;
     try {
       setAdminError(""); setAdminStatus("submitting");
-      const provider = await wallet.getEthereumProvider();
-      const wc = createWalletClient({ chain: anvil, transport: custom(provider) });
-      const account = wallet.address as `0x${string}`;
       const amt0 = withdraw0 ? parseUnits(withdraw0, 18) : 0n;
       const amt1 = withdraw1 ? parseUnits(withdraw1, 18) : 0n;
-      await wc.writeContract({ address: MM_ADDRESSES.liquidityVault, abi: LiquidityVaultABI, functionName: "withdraw", args: [MM_POOL_ID, amt0, amt1], account });
+      await demoWalletClient.writeContract({ address: MM_ADDRESSES.liquidityVault, abi: LiquidityVaultABI, functionName: "withdraw", args: [MM_POOL_ID, amt0, amt1], account: demoAccount });
       setAdminStatus("done"); setWithdraw0(""); setWithdraw1("");
       await loadMMData();
     } catch (err: unknown) {
@@ -162,13 +155,10 @@ export default function MarketsPage() {
   }
 
   async function handlePauseToggle() {
-    if (!wallet || !mmState) return;
+    if (!mmState) return;
     try {
       setAdminError("");
-      const provider = await wallet.getEthereumProvider();
-      const wc = createWalletClient({ chain: anvil, transport: custom(provider) });
-      const account = wallet.address as `0x${string}`;
-      await wc.writeContract({ address: MM_ADDRESSES.strategyManager, abi: StrategyManagerABI, functionName: "setPoolPaused", args: [MM_POOL_ID, !mmState.isPaused], account });
+      await demoWalletClient.writeContract({ address: MM_ADDRESSES.strategyManager, abi: StrategyManagerABI, functionName: "setPoolPaused", args: [MM_POOL_ID, !mmState.isPaused], account: demoAccount });
       await loadMMData();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Transaction failed";
@@ -177,12 +167,9 @@ export default function MarketsPage() {
   }
 
   async function handleExecuteStrategy() {
-    if (!wallet) return;
     try {
       setAdminError("");
-      const provider = await wallet.getEthereumProvider();
-      const wc = createWalletClient({ chain: anvil, transport: custom(provider) });
-      await wc.writeContract({ address: MM_ADDRESSES.strategyManager, abi: StrategyManagerABI, functionName: "executeStrategyUpdate", args: [MM_POOL_ID], account: wallet.address as `0x${string}` });
+      await demoWalletClient.writeContract({ address: MM_ADDRESSES.strategyManager, abi: StrategyManagerABI, functionName: "executeStrategyUpdate", args: [MM_POOL_ID], account: demoAccount });
       await loadMMData();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Transaction failed";
@@ -191,12 +178,9 @@ export default function MarketsPage() {
   }
 
   async function handleCancelStrategy() {
-    if (!wallet) return;
     try {
       setAdminError("");
-      const provider = await wallet.getEthereumProvider();
-      const wc = createWalletClient({ chain: anvil, transport: custom(provider) });
-      await wc.writeContract({ address: MM_ADDRESSES.strategyManager, abi: StrategyManagerABI, functionName: "cancelStrategyUpdate", args: [MM_POOL_ID], account: wallet.address as `0x${string}` });
+      await demoWalletClient.writeContract({ address: MM_ADDRESSES.strategyManager, abi: StrategyManagerABI, functionName: "cancelStrategyUpdate", args: [MM_POOL_ID], account: demoAccount });
       await loadMMData();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Transaction failed";
@@ -205,17 +189,14 @@ export default function MarketsPage() {
   }
 
   async function handleQueueStrategy(moduleAddrs: string[], encodedConfigs: `0x${string}`[]) {
-    if (!wallet) return;
     try {
       setAdminError("");
-      const provider = await wallet.getEthereumProvider();
-      const wc = createWalletClient({ chain: anvil, transport: custom(provider) });
-      await wc.writeContract({
+      await demoWalletClient.writeContract({
         address: MM_ADDRESSES.strategyManager,
         abi: StrategyManagerABI,
         functionName: "queueStrategyUpdate",
         args: [MM_POOL_ID, moduleAddrs as `0x${string}`[], encodedConfigs],
-        account: wallet.address as `0x${string}`,
+        account: demoAccount,
       });
       await loadMMData();
     } catch (err: unknown) {
@@ -226,25 +207,22 @@ export default function MarketsPage() {
 
   // ── Settlement redeem ─────────────────────────────────────────────────────
   async function handleRedeem() {
-    if (!wallet || !redeemAmount || !ADDRESSES.settlement) {
+    if (!redeemAmount || !ADDRESSES.settlement) {
       setSettleTxError("Settlement address not set"); setSettleTxStatus("error"); return;
     }
     try {
       setSettleTxError("");
-      const provider = await wallet.getEthereumProvider();
-      const wc = createWalletClient({ chain: bsc, transport: custom(provider) });
-      const account = wallet.address as `0x${string}`;
       const amount = parseUnits(redeemAmount, 18);
       if (settleTab === "pt") {
         setSettleTxStatus("approving");
-        await wc.writeContract({ address: ADDRESSES.principalToken, abi: ERC20ABI, functionName: "approve", args: [ADDRESSES.settlement, amount], account });
+        await demoWalletClient.writeContract({ address: ADDRESSES.principalToken, abi: ERC20ABI, functionName: "approve", args: [ADDRESSES.settlement, amount], account: demoAccount });
         setSettleTxStatus("submitting");
-        await wc.writeContract({ address: ADDRESSES.settlement, abi: SettlementABI, functionName: "redeemPT", args: [amount], account });
+        await demoWalletClient.writeContract({ address: ADDRESSES.settlement, abi: SettlementABI, functionName: "redeemPT", args: [amount], account: demoAccount });
       } else {
         setSettleTxStatus("approving");
-        await wc.writeContract({ address: ADDRESSES.riskToken, abi: ERC20ABI, functionName: "approve", args: [ADDRESSES.settlement, amount], account });
+        await demoWalletClient.writeContract({ address: ADDRESSES.riskToken, abi: ERC20ABI, functionName: "approve", args: [ADDRESSES.settlement, amount], account: demoAccount });
         setSettleTxStatus("submitting");
-        await wc.writeContract({ address: ADDRESSES.settlement, abi: SettlementABI, functionName: "settleRT", args: [amount], account });
+        await demoWalletClient.writeContract({ address: ADDRESSES.settlement, abi: SettlementABI, functionName: "settleRT", args: [amount], account: demoAccount });
       }
       setSettleTxStatus("done"); setRedeemAmount(""); await loadSettlementData();
     } catch (err: unknown) {
@@ -254,9 +232,31 @@ export default function MarketsPage() {
     }
   }
 
+  // ── Allocation NFT redeem ─────────────────────────────────────────────────
+  async function handleRedeemAlloc(tokenId: string) {
+    if (!ADDRESSES.settlement) return;
+    try {
+      setAllocTxError((prev) => ({ ...prev, [tokenId]: "" }));
+      setAllocTxStatus((prev) => ({ ...prev, [tokenId]: "submitting" }));
+      await demoWalletClient.writeContract({
+        address: ADDRESSES.settlement,
+        abi: SettlementABI,
+        functionName: "redeemAllocation",
+        args: [BigInt(tokenId)],
+        account: demoAccount,
+      });
+      setAllocTxStatus((prev) => ({ ...prev, [tokenId]: "done" }));
+      await loadUserNFTs();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Transaction failed";
+      setAllocTxError((prev) => ({ ...prev, [tokenId]: msg.includes("user rejected") ? "Rejected." : msg.slice(0, 120) }));
+      setAllocTxStatus((prev) => ({ ...prev, [tokenId]: "error" }));
+    }
+  }
+
   // ── Derived values ────────────────────────────────────────────────────────
   const pct0 = mmState ? pctDeployed(mmState.deployed0, mmState.total0) : 0;
-  const isOwner = authenticated && wallet?.address?.toLowerCase() === mmState?.vaultOwner?.toLowerCase();
+  const isOwner = demoAccount.address.toLowerCase() === mmState?.vaultOwner?.toLowerCase();
   const now = Math.floor(Date.now() / 1000);
 
   const ptBalanceFmt = ptBalance !== "0" ? Number(formatUnits(BigInt(ptBalance), 18)).toLocaleString() : "0";
@@ -385,9 +385,7 @@ export default function MarketsPage() {
 
             {/* RIGHT: admin */}
             <div className="col-span-12 lg:col-span-4 border-l border-white/5 bg-[#101926]/20 p-6 flex flex-col gap-4 overflow-y-auto">
-              {!authenticated ? (
-                <p className="text-[10px] font-mono text-neutral-500 text-center pt-10">Connect wallet to manage.</p>
-              ) : !isOwner ? (
+              {!isOwner ? (
                 <div className="text-center pt-10 space-y-1">
                   <p className="text-[11px] font-mono text-neutral-500">Read-only view</p>
                   <p className="text-[10px] text-neutral-700 font-mono">Owner: {mmState?.vaultOwner?.slice(0, 10)}…</p>
@@ -488,12 +486,37 @@ export default function MarketsPage() {
 
           <div className="flex-1 grid grid-cols-12 overflow-hidden border-t border-white/5">
             <div className="col-span-12 lg:col-span-8 p-6 flex flex-col space-y-6">
-              <div className="flex-1 min-h-[400px] bg-[#0d1724]/40 rounded-[2rem] p-6 border border-white/5 relative overflow-hidden">
-                <div className="absolute top-0 right-0 p-6 flex gap-2">
-                  <span className="px-2 py-1 bg-blue-500/10 border border-blue-500/20 text-[9px] text-blue-400 font-mono rounded">PT</span>
-                  <span className="px-2 py-1 bg-orange-500/10 border border-orange-500/20 text-[9px] text-orange-400 font-mono rounded">RT</span>
+              <div className="min-h-[200px] bg-[#0d1724]/40 rounded-[2rem] p-6 border border-white/5 grid grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <span className="text-[9px] font-mono text-neutral-600 uppercase tracking-widest block">TGE Price</span>
+                  <span className="text-2xl font-mono text-white">
+                    {tgePriceFmt ? `$${tgePriceFmt}` : "—"}
+                  </span>
+                  <span className="text-[9px] font-mono text-neutral-600">set by protocol at token generation event</span>
                 </div>
-                <BondingCurveChart />
+                <div className="space-y-1">
+                  <span className="text-[9px] font-mono text-neutral-600 uppercase tracking-widest block">Payout / RT</span>
+                  <span className="text-2xl font-mono text-orange-400">
+                    {settlement && settlement.payoutPerRT !== "0"
+                      ? `$${Number(formatUnits(BigInt(settlement.payoutPerRT), 6)).toFixed(6)}`
+                      : "—"}
+                  </span>
+                  <span className="text-[9px] font-mono text-neutral-600">USDC per Risk Token</span>
+                </div>
+                <div className="space-y-1">
+                  <span className="text-[9px] font-mono text-neutral-600 uppercase tracking-widest block">Clearing Price</span>
+                  <span className="text-xl font-mono text-blue-400">
+                    {settlement && settlement.clearingPrice !== "0"
+                      ? `$${Number(formatUnits(BigInt(settlement.clearingPrice), 6)).toFixed(6)}`
+                      : "—"}
+                  </span>
+                </div>
+                <div className="space-y-1">
+                  <span className="text-[9px] font-mono text-neutral-600 uppercase tracking-widest block">Unlock Date</span>
+                  <span className="text-xl font-mono text-white">
+                    {settlement ? new Date(settlement.unlockTime * 1000).toLocaleDateString() : "—"}
+                  </span>
+                </div>
               </div>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <InfoBox label="RT Cap Multiplier" value={settlement ? `${settlement.rtCapMultiplier}x` : "—"} />
@@ -509,48 +532,88 @@ export default function MarketsPage() {
                   className={`flex-1 py-3 rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all ${settleTab === "pt" ? "bg-emerald-500 text-black" : "bg-white/5 text-neutral-500 hover:text-white"}`}>Redeem PT</button>
                 <button onClick={() => { setSettleTab("rt"); setRedeemAmount(""); setSettleTxStatus("idle"); }}
                   className={`flex-1 py-3 rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all ${settleTab === "rt" ? "bg-orange-500 text-black" : "bg-white/5 text-neutral-500 hover:text-white"}`}>Settle RT</button>
+                <button onClick={() => { setSettleTab("alloc"); loadUserNFTs(); }}
+                  className={`flex-1 py-3 rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all ${settleTab === "alloc" ? "bg-purple-500 text-black" : "bg-white/5 text-neutral-500 hover:text-white"}`}>Redeem Alloc</button>
               </div>
 
-              <div className="p-4 bg-white/[0.02] border border-white/5 rounded-2xl space-y-2 font-mono text-[11px]">
-                {settleTab === "pt" ? (
-                  <>
-                    <InfoRow label="Your PT Balance" value={`${ptBalanceFmt} PT`} />
-                    <InfoRow label="Receive" value="1:1 LaunchToken" color="text-emerald-400" />
-                    <InfoRow label="Clearing Price" value={clearingPriceFmt ? `$${clearingPriceFmt}` : "—"} color="text-blue-400" />
-                    <InfoRow label="Unlock" value={unlocked ? "Unlocked" : settlement ? new Date(settlement.unlockTime * 1000).toLocaleDateString() : "—"} color={unlocked ? "text-emerald-400" : "text-red-400"} />
-                  </>
-                ) : (
-                  <>
-                    <InfoRow label="Your RT Balance" value={`${rtBalanceFmt} RT`} />
-                    <InfoRow label="Payout Per RT" value={payoutPerRTFmt ? `$${payoutPerRTFmt}` : "TBD"} color="text-orange-400" />
-                    <InfoRow label="TGE Price" value={tgePriceFmt ? `$${tgePriceFmt}` : "Not set"} color={tgeSet ? "text-blue-400" : "text-yellow-400"} />
-                    <InfoRow label="RT Cap Multiplier" value={settlement ? `${settlement.rtCapMultiplier}x` : "—"} />
-                    <InfoRow label="Est. USDC Out" value={`${estimatedUSDC} USDC`} color="text-white" />
-                  </>
-                )}
-              </div>
+              {settleTab !== "alloc" && (
+                <>
+                  <div className="p-4 bg-white/[0.02] border border-white/5 rounded-2xl space-y-2 font-mono text-[11px]">
+                    {settleTab === "pt" ? (
+                      <>
+                        <InfoRow label="Your PT Balance" value={`${ptBalanceFmt} PT`} />
+                        <InfoRow label="Receive" value="1:1 LaunchToken" color="text-emerald-400" />
+                        <InfoRow label="Clearing Price" value={clearingPriceFmt ? `$${clearingPriceFmt}` : "—"} color="text-blue-400" />
+                        <InfoRow label="Unlock" value={unlocked ? "Unlocked" : settlement ? new Date(settlement.unlockTime * 1000).toLocaleDateString() : "—"} color={unlocked ? "text-emerald-400" : "text-red-400"} />
+                      </>
+                    ) : (
+                      <>
+                        <InfoRow label="Your RT Balance" value={`${rtBalanceFmt} RT`} />
+                        <InfoRow label="Payout Per RT" value={payoutPerRTFmt ? `$${payoutPerRTFmt}` : "TBD"} color="text-orange-400" />
+                        <InfoRow label="TGE Price" value={tgePriceFmt ? `$${tgePriceFmt}` : "Not set"} color={tgeSet ? "text-blue-400" : "text-yellow-400"} />
+                        <InfoRow label="RT Cap Multiplier" value={settlement ? `${settlement.rtCapMultiplier}x` : "—"} />
+                        <InfoRow label="Est. USDC Out" value={`${estimatedUSDC} USDC`} color="text-white" />
+                      </>
+                    )}
+                  </div>
 
-              <div className="space-y-2">
-                <div className="flex justify-between px-1">
-                  <label className="text-[10px] font-mono text-neutral-500 uppercase tracking-widest">{settleTab === "pt" ? "PT Amount" : "RT Amount"}</label>
-                  <button onClick={() => setRedeemAmount(settleTab === "pt" ? formatUnits(BigInt(ptBalance), 18) : formatUnits(BigInt(rtBalance), 18))}
-                    className="text-[10px] font-mono text-blue-400 hover:text-white">MAX</button>
+                  <div className="space-y-2">
+                    <div className="flex justify-between px-1">
+                      <label className="text-[10px] font-mono text-neutral-500 uppercase tracking-widest">{settleTab === "pt" ? "PT Amount" : "RT Amount"}</label>
+                      <button onClick={() => setRedeemAmount(settleTab === "pt" ? formatUnits(BigInt(ptBalance), 18) : formatUnits(BigInt(rtBalance), 18))}
+                        className="text-[10px] font-mono text-blue-400 hover:text-white">MAX</button>
+                    </div>
+                    <input type="number" placeholder="0.00" value={redeemAmount} onChange={(e) => setRedeemAmount(e.target.value)}
+                      disabled={settleTab === "pt" ? !unlocked : !tgeSet}
+                      className="w-full bg-black/40 border border-white/10 rounded-xl p-3 text-white font-mono text-sm focus:outline-none focus:border-blue-500/40 disabled:opacity-40" />
+                  </div>
+
+                  {settleTab === "pt" && !unlocked && <Warning>PT redemption unlocks on {settlement ? new Date(settlement.unlockTime * 1000).toLocaleString() : "—"}</Warning>}
+                  {settleTab === "rt" && !tgeSet && <Warning>TGE price not set yet. RT settlement opens after unlock + 24h delay.</Warning>}
+                  {settleTxStatus === "error" && <ErrorMsg>{settleTxError}</ErrorMsg>}
+                  {settleTxStatus === "done" && <SuccessMsg>{settleTab === "pt" ? "PT redeemed! LaunchTokens sent." : "RT settled! USDC sent."}</SuccessMsg>}
+                  <button onClick={handleRedeem} disabled={!canSubmit}
+                    className={`w-full py-4 font-bold text-[10px] uppercase rounded-xl tracking-widest transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed disabled:scale-100 ${settleTab === "pt" ? "bg-emerald-500 text-black" : "bg-orange-500 text-black"}`}>
+                    {settleTxStatus === "approving" ? "Approving…" : settleTxStatus === "submitting" ? (settleTab === "pt" ? "Redeeming…" : "Settling…") : settleTab === "pt" ? "Redeem PT → LaunchToken" : "Settle RT → USDC"}
+                  </button>
+                </>
+              )}
+
+              {settleTab === "alloc" && (
+                <div className="flex flex-col gap-3">
+                  {nftsLoading && <p className="text-[10px] font-mono text-neutral-500 text-center py-4">Loading NFTs…</p>}
+                  {!nftsLoading && userNFTs.length === 0 && (
+                    <p className="text-[10px] font-mono text-neutral-500 text-center py-4">No allocation NFTs found for this wallet.</p>
+                  )}
+                  {!nftsLoading && userNFTs.map((nft) => {
+                    const nftUnlocked = now >= nft.unlockTime;
+                    const status = allocTxStatus[nft.tokenId] ?? "idle";
+                    const err = allocTxError[nft.tokenId] ?? "";
+                    return (
+                      <div key={nft.tokenId} className="p-4 bg-white/[0.02] border border-purple-500/20 rounded-2xl space-y-2">
+                        <div className="flex justify-between items-center">
+                          <span className="text-[9px] font-mono text-neutral-500 uppercase tracking-widest">NFT #{nft.tokenId}</span>
+                          <span className={`text-[9px] font-mono px-2 py-0.5 rounded ${nftUnlocked ? "bg-emerald-500/10 text-emerald-400" : "bg-red-500/10 text-red-400"}`}>
+                            {nftUnlocked ? "Unlocked" : new Date(nft.unlockTime * 1000).toLocaleDateString()}
+                          </span>
+                        </div>
+                        <div className="space-y-1 font-mono text-[11px]">
+                          <InfoRow label="Allocation" value={`${Number(nft.amount).toLocaleString(undefined, { maximumFractionDigits: 4 })} tokens`} />
+                          <InfoRow label="Clearing Price" value={`$${nft.clearingPrice}`} color="text-blue-400" />
+                        </div>
+                        {err && <ErrorMsg>{err}</ErrorMsg>}
+                        {status === "done" && <SuccessMsg>Redeemed! LaunchTokens sent.</SuccessMsg>}
+                        <button
+                          onClick={() => handleRedeemAlloc(nft.tokenId)}
+                          disabled={!nftUnlocked || status === "submitting" || status === "done"}
+                          className="w-full py-3 rounded-xl bg-purple-500 text-black text-[10px] font-bold uppercase tracking-widest hover:bg-purple-400 transition-all disabled:opacity-40 disabled:cursor-not-allowed">
+                          {status === "submitting" ? "Redeeming…" : status === "done" ? "Redeemed ✓" : "Redeem → LaunchToken"}
+                        </button>
+                      </div>
+                    );
+                  })}
                 </div>
-                <input type="number" placeholder="0.00" value={redeemAmount} onChange={(e) => setRedeemAmount(e.target.value)}
-                  disabled={settleTab === "pt" ? !unlocked : !tgeSet}
-                  className="w-full bg-black/40 border border-white/10 rounded-xl p-3 text-white font-mono text-sm focus:outline-none focus:border-blue-500/40 disabled:opacity-40" />
-              </div>
-
-              {settleTab === "pt" && !unlocked && <Warning>PT redemption unlocks on {settlement ? new Date(settlement.unlockTime * 1000).toLocaleString() : "—"}</Warning>}
-              {settleTab === "rt" && !tgeSet && <Warning>TGE price not set yet. RT settlement opens after unlock + 24h delay.</Warning>}
-              {settleTxStatus === "error" && <ErrorMsg>{settleTxError}</ErrorMsg>}
-              {settleTxStatus === "done" && <SuccessMsg>{settleTab === "pt" ? "PT redeemed! LaunchTokens sent." : "RT settled! USDC sent."}</SuccessMsg>}
-              {!authenticated && <p className="text-[10px] font-mono text-neutral-500 text-center">Connect wallet to redeem.</p>}
-
-              <button onClick={handleRedeem} disabled={!canSubmit || !authenticated}
-                className={`w-full py-4 font-bold text-[10px] uppercase rounded-xl tracking-widest transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed disabled:scale-100 ${settleTab === "pt" ? "bg-emerald-500 text-black" : "bg-orange-500 text-black"}`}>
-                {settleTxStatus === "approving" ? "Approving…" : settleTxStatus === "submitting" ? (settleTab === "pt" ? "Redeeming…" : "Settling…") : settleTab === "pt" ? "Redeem PT → LaunchToken" : "Settle RT → USDC"}
-              </button>
+              )}
             </div>
           </div>
         </div>
