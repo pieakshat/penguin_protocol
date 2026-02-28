@@ -58,7 +58,7 @@ export function SettlementChart({ settlement, sensitivity }: Props) {
             />
             <Tooltip
               contentStyle={{ backgroundColor: '#1f2937', border: '1px solid #374151', borderRadius: 8 }}
-              formatter={(v: number | undefined, name: string) => [
+              formatter={(v: number | undefined, name: string | undefined) => [
                 name === 'Payout/RT' ? `$${(v ?? 0).toFixed(4)}` : `$${(v ?? 0).toFixed(2)}`,
                 name,
               ]}

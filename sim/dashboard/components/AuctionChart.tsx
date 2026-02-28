@@ -77,7 +77,7 @@ export function AuctionChart({ auction }: Props) {
             <Tooltip
               contentStyle={{ backgroundColor: '#1f2937', border: '1px solid #374151', borderRadius: 8 }}
               labelFormatter={v => `Price: $${Number(v).toFixed(4)}`}
-              formatter={(v: number | undefined, name: string) => [`${((v ?? 0) / 1000).toFixed(1)}k`, name === 'winQty' ? 'Filled' : 'Refunded']}
+              formatter={(v: number | undefined, name: string | undefined) => [`${((v ?? 0) / 1000).toFixed(1)}k`, name === 'winQty' ? 'Filled' : 'Refunded']}
             />
             <ReferenceLine
               x={clearingPrice}

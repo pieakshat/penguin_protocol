@@ -8,6 +8,7 @@ import { PoolPriceChart } from '@/components/PoolPriceChart';
 import { DepthChart } from '@/components/DepthChart';
 import { PnLChart } from '@/components/PnLChart';
 import { SettlementChart } from '@/components/SettlementChart';
+import { ComparisonChart } from '@/components/ComparisonChart';
 
 const DEFAULT_PARAMS: ScenarioParams = {
   totalSupply: 1_000_000,
@@ -22,13 +23,14 @@ const DEFAULT_PARAMS: ScenarioParams = {
   seed: 42,
 };
 
-type Tab = 'auction' | 'pools' | 'traders' | 'settlement';
+type Tab = 'auction' | 'pools' | 'traders' | 'settlement' | 'compare';
 
 const TABS: { id: Tab; label: string }[] = [
-  { id: 'auction', label: 'Auction' },
-  { id: 'pools', label: 'Pools' },
-  { id: 'traders', label: 'Traders' },
+  { id: 'auction',    label: 'Auction'    },
+  { id: 'pools',      label: 'Pools'      },
+  { id: 'traders',    label: 'Traders'    },
   { id: 'settlement', label: 'Settlement' },
+  { id: 'compare',    label: 'vs Markets' },
 ];
 
 export default function Home() {
@@ -169,6 +171,10 @@ export default function Home() {
                   settlement={result.settlement}
                   sensitivity={result.sensitivity}
                 />
+              )}
+
+              {activeTab === 'compare' && (
+                <ComparisonChart comparison={result.comparison} />
               )}
             </>
           )}

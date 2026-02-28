@@ -147,6 +147,47 @@ export interface SensitivityPoint {
   avgBidderPnL: number;
 }
 
+// ─── ICO Comparison ───────────────────────────────────────────────────────
+
+export type TradICOModel = 'fcfs' | 'whitelist' | 'dutch' | 'penguin';
+
+export interface ICOAllocation {
+  participantId: number;
+  tokens: number;
+  pricePaid: number;   // USDC per token
+  usdcSpent: number;
+  usdcRefunded: number;
+  isRetail: boolean;   // bottom 50% by desired size
+}
+
+export interface ICOMetrics {
+  model: TradICOModel;
+  label: string;
+  salePrice: number;          // effective price paid (clearing or fixed)
+  totalRaised: number;        // net USDC raised by protocol
+  giniCoefficient: number;    // 0 = perfect equality, 1 = one holder has all
+  whaleCapture: number;       // % of supply held by top-10% of winners
+  retailFillRate: number;     // % of retail participants who got any tokens
+  refundRate: number;         // % of deposited capital returned to participants
+  day1DumpRisk: number;       // estimated % of supply under immediate sell pressure
+  botAdvantage: number;       // 1.0 = no advantage; >1 = whales/bots get proportionally more
+  priceDiscovery: number;     // 0-100 score: how close sale price is to true fair value
+  // Radar dimensions (0-100, higher = better)
+  radar: {
+    priceDiscovery: number;
+    distributionFairness: number;
+    retailAccess: number;
+    capitalEfficiency: number;
+    dumpResistance: number;
+    botResistance: number;
+  };
+}
+
+export interface ComparisonResult {
+  fairPrice: number;    // Penguin clearing price used as baseline "true value"
+  models: ICOMetrics[];
+}
+
 // ─── Full Result ──────────────────────────────────────────────────────────
 
 export interface SimulationResult {
@@ -163,4 +204,5 @@ export interface SimulationResult {
   traders: TraderResult[];
   settlement: SettlementResult;
   sensitivity: SensitivityPoint[];
+  comparison: ComparisonResult;
 }

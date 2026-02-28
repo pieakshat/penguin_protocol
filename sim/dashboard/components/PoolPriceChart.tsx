@@ -72,7 +72,7 @@ export function PoolPriceChart({ ptSnapshots, rtSnapshots, trades, clearingPrice
             <YAxis yAxisId="vol" orientation="right" tick={{ fontSize: 10, fill: '#6b7280' }} tickFormatter={v => `${(v / 1000).toFixed(0)}k`} />
             <Tooltip
               contentStyle={{ backgroundColor: '#1f2937', border: '1px solid #374151', borderRadius: 8 }}
-              formatter={(v: number | undefined, name: string) => [name.includes('rice') ? `$${(v ?? 0).toFixed(4)}` : `${((v ?? 0) / 1000).toFixed(1)}k`, name]}
+              formatter={(v: number | undefined, name: string | undefined) => [name?.includes('rice') ? `$${(v ?? 0).toFixed(4)}` : `${((v ?? 0) / 1000).toFixed(1)}k`, name]}
             />
             <Bar yAxisId="vol" dataKey="ptVolume" fill="#1d4ed8" opacity={0.4} name="Volume" />
             <Line yAxisId="price" type="monotone" dataKey="ptPrice" stroke="#60a5fa" strokeWidth={2} dot={false} name="PT Price" />
@@ -94,7 +94,7 @@ export function PoolPriceChart({ ptSnapshots, rtSnapshots, trades, clearingPrice
             <YAxis yAxisId="vol" orientation="right" tick={{ fontSize: 10, fill: '#6b7280' }} tickFormatter={v => `${(v / 1000).toFixed(0)}k`} />
             <Tooltip
               contentStyle={{ backgroundColor: '#1f2937', border: '1px solid #374151', borderRadius: 8 }}
-              formatter={(v: number | undefined, name: string) => [name.includes('rice') ? `$${(v ?? 0).toFixed(5)}` : `${((v ?? 0) / 1000).toFixed(1)}k`, name]}
+              formatter={(v: number | undefined, name: string | undefined) => [name?.includes('rice') ? `$${(v ?? 0).toFixed(5)}` : `${((v ?? 0) / 1000).toFixed(1)}k`, name]}
             />
             <Bar yAxisId="vol" dataKey="rtVolume" fill="#7c3aed" opacity={0.4} name="Volume" />
             <Line yAxisId="price" type="monotone" dataKey="rtPrice" stroke="#a78bfa" strokeWidth={2} dot={false} name="RT Price" />

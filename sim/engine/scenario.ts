@@ -4,6 +4,7 @@ import { runArmVault } from './armvault';
 import { V3Pool } from './v3pool';
 import { runTraders } from './traders';
 import { runSettlement, runSensitivity } from './settlement';
+import { runComparison } from './traditional';
 
 // ─── Default Params ───────────────────────────────────────────────────────
 
@@ -88,6 +89,9 @@ export function runScenario(params: ScenarioParams = DEFAULT_PARAMS): Simulation
   const settlement = runSettlement(auction, params);
   const sensitivity = runSensitivity(auction, params);
 
+  // Comparison: run all 4 ICO models against same participant pool
+  const comparison = runComparison(auction, params.seed ?? 42);
+
   return {
     params,
     auction,
@@ -102,6 +106,7 @@ export function runScenario(params: ScenarioParams = DEFAULT_PARAMS): Simulation
     traders,
     settlement,
     sensitivity,
+    comparison,
   };
 }
 

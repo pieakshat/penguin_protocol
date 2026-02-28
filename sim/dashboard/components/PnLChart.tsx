@@ -62,7 +62,7 @@ export function PnLChart({ traders, trades }: Props) {
             <YAxis tickFormatter={v => `$${(v / 1000).toFixed(1)}k`} tick={{ fontSize: 10, fill: '#9ca3af' }} />
             <Tooltip
               contentStyle={{ backgroundColor: '#1f2937', border: '1px solid #374151', borderRadius: 8 }}
-              formatter={(v: number | undefined, name: string) => [`$${(v ?? 0).toFixed(2)}`, name]}
+              formatter={(v: number | undefined, name: string | undefined) => [`$${(v ?? 0).toFixed(2)}`, name]}
             />
             <ReferenceLine y={0} stroke="#6b7280" strokeDasharray="2 2" />
             <Legend />
